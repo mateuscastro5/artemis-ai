@@ -20,7 +20,7 @@ build/
 
 # Model cache (large files downloaded at runtime)
 .cache/
-models/
+/models/
 
 # Logs
 *.log
