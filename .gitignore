@@ -1,0 +1,26 @@
+# Environment - NEVER commit
+.env
+.env.local
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Model cache (large files downloaded at runtime)
+.cache/
+models/
+
+# Logs
+*.log
