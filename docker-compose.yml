@@ -1,0 +1,82 @@
+services:
+
+  # ─── Banco Vetorial ───────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Serviço de IA (FastAPI + RAG) ───────────────────────────────────────
+  perform-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - ai_model_cache:/root/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Backend (NestJS) ─────────────────────────────────────────────────────
+  perform-api:
+    build:
+      context: ../perform-api
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../perform-api/.env
+    environment:
+      - AI_SERVICE_URL=http://perform-ai:8000
+    depends_on:
+      perform-ai:
+        condition: service_healthy
+    volumes:
+      - ../perform-api:/app
+      - api_node_modules:/app/node_modules
+    restart: unless-stopped
+
+  # ─── Frontend (React via Vite) ────────────────────────────────────────────
+  perform-front:
+    build:
+      context: ../perform-front
+      dockerfile: Dockerfile
+    ports:
+      - "5123:5123"
+    depends_on:
+      - perform-api
+    volumes:
+      - ../perform-front:/app
+      - front_node_modules:/app/node_modules
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  ai_model_cache:
+  api_node_modules:
+  front_node_modules:
