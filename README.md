@@ -1,93 +1,182 @@
 # perform-ai
 
+Serviço de análise de complexidade de Pull Requests via **Dual-LLM + RAG**.
 
+Recebe diffs do GitHub, resume com um LLM rápido (Gemini Flash), busca exemplos similares no Qdrant e gera um score de 0–100 com um LLM poderoso (Gemini Pro). Aprende continuamente com o feedback dos Tech Leads.
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Arquitetura
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/senac-projetos-de-desenvolvimento/2025-mateus-silva-de-castro-fagundes/perform/perform-ai.git
-git branch -M main
-git push -uf origin main
+PR diff
+  └─ Preprocessor (remove ruído, lock files, imports)
+       └─ LLM Reader / Gemini Flash (resume o diff em linguagem técnica)
+            └─ Embedding (sentence-transformers, local, 384 dims)
+                 └─ Qdrant RAG (busca Top 3 exemplos similares com score conhecido)
+                      └─ LLM Scorer / Gemini Pro (decide score 0-100 com contexto)
+                           └─ Resultado: score, confiança, justificativa
 ```
 
-## Integrate with your tools
+Se a confiança for baixa (`< 0.7`), a análise é marcada como `doubtful` e enviada para revisão humana. A correção do Tech Lead é reinserida no Qdrant como novo exemplo de calibração.
 
-* [Set up project integrations](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-mateus-silva-de-castro-fagundes/perform/perform-ai/-/settings/integrations)
+---
 
-## Collaborate with your team
+## Pré-requisitos
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- Python 3.11+
+- Docker (para o Qdrant)
+- Chave de API do [Google Gemini](https://aistudio.google.com/apikey)
 
-## Test and Deploy
+---
 
-Use the built-in continuous integration in GitLab.
+## Setup
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+### 1. Variáveis de ambiente
 
-***
+```bash
+cp .env.example .env
+```
 
-# Editing this README
+Editar `.env`:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```env
+GEMINI_API_KEY=sua_chave_aqui
+QDRANT_URL=http://localhost:6333
+LLM_READER_MODEL=gemini-2.0-flash
+LLM_SCORER_MODEL=gemini-2.0-flash
+CONFIDENCE_THRESHOLD=0.7
+```
 
-## Suggestions for a good README
+### 2. Subir o Qdrant (banco vetorial)
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+docker-compose up qdrant -d
+```
 
-## Name
-Choose a self-explaining name for your project.
+Sem conta, sem cloud — roda 100% local. Dados persistidos em volume Docker.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 3. Instalar dependências Python
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+pip install .
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Ou com `uv`:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+uv sync
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### 4. Rodar o serviço
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+uvicorn app.main:app --reload --port 8000
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Na primeira execução, o modelo de embedding (`all-MiniLM-L6-v2`, ~90MB) é baixado automaticamente e cacheado.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+---
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## Endpoints
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/health` | Status do serviço, Qdrant e modelo |
+| `POST` | `/api/v1/analyze-pr` | Analisa uma PR e retorna score de complexidade |
+| `POST` | `/api/v1/feedback` | Envia correção humana para o Qdrant |
+| `POST` | `/api/v1/gold-set` | Adiciona exemplo curado ao Gold Set |
+| `GET` | `/api/v1/gold-set` | Lista todos os exemplos do Qdrant |
+| `DELETE` | `/api/v1/gold-set/{id}` | Remove um exemplo |
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Documentação interativa disponível em `http://localhost:8000/docs` (Swagger UI).
 
-## License
-For open source projects, say how it is licensed.
+---
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Exemplo de uso
+
+```bash
+curl -X POST http://localhost:8000/api/v1/analyze-pr \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pr_id": "uuid-da-pr",
+    "title": "feat: implement payment retry logic",
+    "body": "Adds exponential backoff for failed payment attempts",
+    "diff": "diff --git a/src/payments/retry.ts ...",
+    "author": "dev-login",
+    "repo_full_name": "org/repo",
+    "pr_number": 42,
+    "additions": 120,
+    "deletions": 15,
+    "changed_files": 3
+  }'
+```
+
+Resposta:
+
+```json
+{
+  "score": 68,
+  "confidence": 0.84,
+  "difficulty_label": "hard",
+  "justification": "Implementa lógica de retry com backoff exponencial em camada crítica de pagamentos...",
+  "technical_summary": "...",
+  "technologies": ["TypeScript"],
+  "requires_review": false,
+  "processing_time_ms": 4200
+}
+```
+
+---
+
+## Estrutura
+
+```
+perform-ai/
+  app/
+    main.py               # FastAPI app, CORS, lifespan
+    config.py             # Configurações via .env
+    models/
+      enums.py            # DifficultyLabel, ChangeType, etc.
+      schemas.py          # Pydantic models (request/response)
+    utils/
+      diff_parser.py      # Parse de unified diffs do GitHub
+      text_cleaner.py     # Remoção de ruído (imports, comentários, etc.)
+    services/
+      preprocessor.py     # Orquestra limpeza do diff
+      embedding_service.py # sentence-transformers local
+      qdrant_service.py   # CRUD no banco vetorial
+      llm_reader.py       # LLM 1 — resumo técnico (Gemini Flash)
+      llm_scorer.py       # LLM 2 — score final com RAG (Gemini Pro)
+      rag_pipeline.py     # Pipeline completo
+    routers/
+      analysis.py         # POST /analyze-pr
+      feedback.py         # POST /feedback
+      gold_set.py         # CRUD /gold-set
+      health.py           # GET /health
+  docker-compose.yml      # Qdrant + FastAPI
+  pyproject.toml
+  Dockerfile
+  .env.example
+```
+
+---
+
+## Gold Set
+
+O Gold Set são exemplos curados manualmente que servem como referência de calibração para o scorer. **Quanto mais exemplos, maior a precisão.**
+
+Recomendado: inserir ao menos **20–30 exemplos** cobrindo todos os níveis (trivial → expert) antes de usar em produção.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/gold-set \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code_snippet": "...",
+    "difficulty_score": 75,
+    "difficulty_label": "hard",
+    "technology": "TypeScript",
+    "change_type": "feature",
+    "description": "Implementação de cache distribuído com Redis e invalidação por evento"
+  }'
+```
