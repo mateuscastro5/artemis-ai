@@ -1,5 +1,25 @@
 services:
 
+  # ─── LLM Local (Ollama + DeepSeek Coder) ─────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Starts the server and pulls the model on first boot (model is cached in volume)
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama serve & sleep 15 && ollama pull deepseek-coder:6.7b ; wait"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 300s
+
   # ─── Banco Vetorial ───────────────────────────────────────────────────────
   qdrant:
     image: qdrant/qdrant:latest
@@ -81,3 +101,4 @@ volumes:
   ai_model_cache:
   api_node_modules:
   front_node_modules:
+  ollama_data:

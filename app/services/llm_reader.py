@@ -55,8 +55,8 @@ class LLMReaderService:
         try:
             return await self._call_gemini(prompt)
         except Exception as e:
-            logger.warning("Gemini Reader failed, trying OpenAI fallback: %s", e)
-            return await self._call_openai(prompt)
+            logger.warning("Gemini Reader failed, trying local Ollama fallback: %s", e)
+            return await self._call_ollama(prompt)
 
     async def _call_gemini(self, prompt: str) -> ReaderOutput:
         async for attempt in AsyncRetrying(
@@ -79,7 +79,7 @@ class LLMReaderService:
                 )
                 return self._parse_response(response.text)
 
-    async def _call_openai(self, prompt: str) -> ReaderOutput:
+    async def _call_ollama(self, prompt: str) -> ReaderOutput:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=2, min=2, max=30),
@@ -89,9 +89,12 @@ class LLMReaderService:
             with attempt:
                 from openai import AsyncOpenAI
 
-                client = AsyncOpenAI(api_key=settings.openai_api_key)
+                client = AsyncOpenAI(
+                    base_url=f"{settings.ollama_url}/v1",
+                    api_key="ollama",  # required by client but not used by Ollama
+                )
                 response = await client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=settings.llm_local_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                     max_tokens=1024,

@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     openai_api_key: str = ""
 
+    # Local LLM via Ollama (fallback when Gemini/OpenAI are unavailable)
+    ollama_url: str = "http://ollama:11434"
+    llm_local_model: str = "deepseek-coder:6.7b"
+
     embedding_model: str = "all-MiniLM-L6-v2"
     llm_reader_model: str = "gemini-2.0-flash"
     llm_scorer_model: str = "gemini-2.0-pro"
