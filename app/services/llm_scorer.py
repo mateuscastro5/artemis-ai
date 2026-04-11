@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 
+from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential, before_sleep_log
+
 from ..config import settings
 from ..models.enums import DifficultyLabel
 from ..models.schemas import ScorerOutput
@@ -105,30 +107,44 @@ class LLMScorerService:
             return await self._call_openai(prompt)
 
     async def _call_gemini(self, prompt: str) -> ScorerOutput:
-        from google import genai
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=2, min=2, max=30),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        ):
+            with attempt:
+                from google import genai
 
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = client.models.generate_content(
-            model=settings.llm_scorer_model,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=1024,
-            ),
-        )
-        return self._parse_response(response.text)
+                client = genai.Client(api_key=settings.gemini_api_key)
+                response = client.models.generate_content(
+                    model=settings.llm_scorer_model,
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=1024,
+                    ),
+                )
+                return self._parse_response(response.text)
 
     async def _call_openai(self, prompt: str) -> ScorerOutput:
-        from openai import AsyncOpenAI
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=2, min=2, max=30),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        ):
+            with attempt:
+                from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=1024,
-        )
-        return self._parse_response(response.choices[0].message.content)
+                client = AsyncOpenAI(api_key=settings.openai_api_key)
+                response = await client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=1024,
+                )
+                return self._parse_response(response.choices[0].message.content)
 
     def _parse_response(self, raw_text: str) -> ScorerOutput:
         text = raw_text.strip()
