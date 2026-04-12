@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential, before_sleep_log
 
@@ -151,11 +152,16 @@ class LLMScorerService:
 
     def _parse_response(self, raw_text: str) -> ScorerOutput:
         text = raw_text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
+
+        # Try to extract JSON from a code fence first
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if fence_match:
+            text = fence_match.group(1)
+        else:
+            # Fall back to finding the first {...} block in the response
+            json_match = re.search(r"\{.*\}", text, re.DOTALL)
+            if json_match:
+                text = json_match.group(0)
 
         data = json.loads(text)
 
