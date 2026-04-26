@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+import voyageai
+
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -10,37 +12,48 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
 
     def __init__(self) -> None:
-        self._model = None
+        self._client: voyageai.AsyncClient | None = None
         self._model_name = settings.embedding_model
+        self._dimension = settings.embedding_dim
 
-    def load_model(self) -> None:
-        from sentence_transformers import SentenceTransformer
-
-        logger.info("Loading embedding model: %s", self._model_name)
-        self._model = SentenceTransformer(self._model_name)
+    def initialize(self) -> None:
+        if not settings.voyage_api_key:
+            raise RuntimeError("VOYAGE_API_KEY is not configured.")
+        self._client = voyageai.AsyncClient(api_key=settings.voyage_api_key)
         logger.info(
-            "Embedding model loaded. Dimension: %d",
-            self._model.get_sentence_embedding_dimension(),
+            "EmbeddingService initialized with Voyage model '%s' (dim=%d).",
+            self._model_name,
+            self._dimension,
         )
 
     @property
     def dimension(self) -> int:
-        if self._model is None:
-            raise RuntimeError("Embedding model not loaded. Call load_model() first.")
-        return self._model.get_sentence_embedding_dimension()
+        return self._dimension
 
     @property
     def is_loaded(self) -> bool:
-        return self._model is not None
+        return self._client is not None
 
-    def embed(self, text: str) -> list[float]:
-        if self._model is None:
-            raise RuntimeError("Embedding model not loaded. Call load_model() first.")
-        vector = self._model.encode(text, normalize_embeddings=True)
-        return vector.tolist()
+    async def embed(self, text: str, input_type: str = "document") -> list[float]:
+        if self._client is None:
+            raise RuntimeError("EmbeddingService not initialized. Call initialize() first.")
+        result = await self._client.embed(
+            texts=[text],
+            model=self._model_name,
+            input_type=input_type,
+        )
+        return result.embeddings[0]
 
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        if self._model is None:
-            raise RuntimeError("Embedding model not loaded. Call load_model() first.")
-        vectors = self._model.encode(texts, normalize_embeddings=True)
-        return [v.tolist() for v in vectors]
+    async def embed_batch(
+        self,
+        texts: list[str],
+        input_type: str = "document",
+    ) -> list[list[float]]:
+        if self._client is None:
+            raise RuntimeError("EmbeddingService not initialized. Call initialize() first.")
+        result = await self._client.embed(
+            texts=texts,
+            model=self._model_name,
+            input_type=input_type,
+        )
+        return result.embeddings

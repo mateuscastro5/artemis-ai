@@ -23,7 +23,7 @@ class QdrantService:
         self._client = QdrantClient(url=settings.qdrant_url, api_key=api_key)
         self._collection = settings.qdrant_collection
 
-    async def ensure_collection(self, vector_size: int = 384) -> None:
+    async def ensure_collection(self, vector_size: int = 1024) -> None:
         collections = self._client.get_collections().collections
         exists = any(c.name == self._collection for c in collections)
 

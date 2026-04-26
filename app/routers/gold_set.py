@@ -31,7 +31,7 @@ async def create_gold_set_example(
     qdrant_service = request.app.state.qdrant_service
 
     try:
-        embedding = embedding_service.embed(body.description)
+        embedding = await embedding_service.embed(body.description)
 
         now = datetime.utcnow().isoformat()
         payload = {

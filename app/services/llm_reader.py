@@ -52,35 +52,9 @@ class LLMReaderService:
             file_summaries="\n".join(file_summaries) if file_summaries else "(none)",
             cleaned_diff=cleaned_diff[:15000],
         )
+        return await self._call_openrouter(prompt)
 
-        try:
-            return await self._call_gemini(prompt)
-        except Exception as e:
-            logger.warning("Gemini Reader failed, trying local Ollama fallback: %s", e)
-            return await self._call_ollama(prompt)
-
-    async def _call_gemini(self, prompt: str) -> ReaderOutput:
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=2, min=2, max=30),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True,
-        ):
-            with attempt:
-                from google import genai
-
-                client = genai.Client(api_key=settings.gemini_api_key)
-                response = client.models.generate_content(
-                    model=settings.llm_reader_model,
-                    contents=prompt,
-                    config=genai.types.GenerateContentConfig(
-                        temperature=0.2,
-                        max_output_tokens=1024,
-                    ),
-                )
-                return self._parse_response(response.text)
-
-    async def _call_ollama(self, prompt: str) -> ReaderOutput:
+    async def _call_openrouter(self, prompt: str) -> ReaderOutput:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=2, min=2, max=30),
@@ -91,11 +65,11 @@ class LLMReaderService:
                 from openai import AsyncOpenAI
 
                 client = AsyncOpenAI(
-                    base_url=f"{settings.ollama_url}/v1",
-                    api_key="ollama",  # required by client but not used by Ollama
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=settings.openrouter_api_key,
                 )
                 response = await client.chat.completions.create(
-                    model=settings.llm_local_model,
+                    model=settings.llm_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                     max_tokens=1024,

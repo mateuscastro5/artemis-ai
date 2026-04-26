@@ -31,7 +31,7 @@ async def submit_feedback(
     qdrant_service = request.app.state.qdrant_service
 
     try:
-        embedding = embedding_service.embed(body.technical_summary)
+        embedding = await embedding_service.embed(body.technical_summary)
 
         payload = {
             "codigo_original": body.diff_snippet,

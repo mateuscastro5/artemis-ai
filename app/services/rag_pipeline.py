@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -9,6 +10,7 @@ from ..models.schemas import AnalyzePRRequest, AnalyzePRResponse, SimilarExample
 from .embedding_service import EmbeddingService
 from .llm_reader import LLMReaderService
 from .llm_scorer import LLMScorerService
+from .memory_service import MemoryService
 from .preprocessor import Preprocessor
 from .qdrant_service import QdrantService
 
@@ -21,9 +23,11 @@ class RAGPipeline:
         self,
         embedding_service: EmbeddingService,
         qdrant_service: QdrantService,
+        memory_service: MemoryService,
     ) -> None:
         self._embedding = embedding_service
         self._qdrant = qdrant_service
+        self._memory = memory_service
         self._preprocessor = Preprocessor()
         self._reader = LLMReaderService()
         self._scorer = LLMScorerService()
@@ -63,7 +67,7 @@ class RAGPipeline:
         )
 
         logger.info("Step 3: Generating embedding...")
-        embedding = self._embedding.embed(reader_output.summary)
+        embedding = await self._embedding.embed(reader_output.summary)
 
         logger.info("Step 4: Searching Qdrant for similar examples...")
         raw_results = self._qdrant.search_similar(embedding, limit=3, min_score=0.4)
@@ -86,7 +90,21 @@ class RAGPipeline:
             for r in raw_results
         ]
 
-        logger.info("Step 5: Scoring with LLM Scorer (RAG context: %d examples)...", len(scorer_examples))
+        developer_context = ""
+        if request.developer_id and self._memory.is_enabled:
+            logger.info("Step 4b: Loading developer memory for %s...", request.developer_id)
+            memories = await self._memory.search(
+                developer_id=request.developer_id,
+                query=reader_output.summary,
+                limit=5,
+            )
+            developer_context = _format_developer_context(memories)
+
+        logger.info(
+            "Step 5: Scoring with LLM Scorer (RAG: %d examples, memory: %s)...",
+            len(scorer_examples),
+            "yes" if developer_context else "no",
+        )
         scorer_output = await self._scorer.score(
             summary=reader_output.summary,
             cleaned_diff=preprocessed.cleaned_diff,
@@ -96,7 +114,22 @@ class RAGPipeline:
             lines_removed=preprocessed.metrics.lines_removed,
             files_changed=preprocessed.metrics.files_changed,
             similar_examples=scorer_examples,
+            developer_context=developer_context,
         )
+
+        if request.developer_id and self._memory.is_enabled:
+            asyncio.create_task(
+                self._memory.add_analysis(
+                    developer_id=request.developer_id,
+                    technical_summary=reader_output.summary,
+                    score=scorer_output.score,
+                    difficulty_label=scorer_output.difficulty_label.value,
+                    technologies=reader_output.technologies,
+                    change_type=reader_output.change_type.value,
+                    pr_number=request.pr_number,
+                    repo=request.repo_full_name,
+                )
+            )
 
         elapsed_ms = int((time.time() - start_time) * 1000)
         requires_review = scorer_output.confidence < settings.confidence_threshold
@@ -122,3 +155,18 @@ class RAGPipeline:
             requires_review=requires_review,
             processing_time_ms=elapsed_ms,
         )
+
+
+def _format_developer_context(memories: list[dict]) -> str:
+    if not memories:
+        return ""
+    lines = []
+    for i, m in enumerate(memories, 1):
+        text = (m.get("memory") or "").strip()
+        if not text:
+            continue
+        meta = m.get("metadata") or {}
+        score = meta.get("score")
+        score_str = f" [past score: {score:.0f}]" if isinstance(score, (int, float)) else ""
+        lines.append(f"{i}.{score_str} {text}")
+    return "\n".join(lines) if lines else ""

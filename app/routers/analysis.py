@@ -22,6 +22,7 @@ def get_pipeline(request: Request) -> RAGPipeline:
     return RAGPipeline(
         embedding_service=request.app.state.embedding_service,
         qdrant_service=request.app.state.qdrant_service,
+        memory_service=request.app.state.memory_service,
     )
 
 

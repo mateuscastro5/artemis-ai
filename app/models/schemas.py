@@ -22,6 +22,7 @@ class AnalyzePRRequest(BaseModel):
     additions: int = 0
     deletions: int = 0
     changed_files: int = 0
+    developer_id: str | None = None
 
 
 class SimilarExample(BaseModel):
@@ -138,6 +139,24 @@ class HealthResponse(BaseModel):
     qdrant_connected: bool
     embedding_model_loaded: bool
     collection_count: int = 0
+
+
+# --- Insights ---
+
+
+class DeveloperInsightsResponse(BaseModel):
+    developer_id: str
+    summary: str
+    strengths: list[str]
+    growth_areas: list[str]
+    dominant_technologies: list[str]
+    trend_narrative: str
+    memory_count: int
+
+
+class MemoryDeleteResponse(BaseModel):
+    developer_id: str
+    deleted_count: int
 
 
 # --- Qdrant Payload ---

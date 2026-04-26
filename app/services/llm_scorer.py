@@ -43,10 +43,16 @@ Diff (excerpt):
 
 {examples_block}
 
+== DEVELOPER CONTEXT (PAST PATTERNS) ==
+
+{developer_context}
+
 == INSTRUCTIONS ==
 
-Based on the reference examples above (if any), calibrate your score for this PR.
-If no reference examples are provided, score based on your expert judgment alone.
+Based on the reference examples and developer context above, calibrate your score for this PR.
+The developer context describes patterns from this developer's past PRs — use it to refine
+confidence and justification when relevant, but do not lower the score for a complex PR
+just because the developer usually writes simpler ones.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {{
@@ -87,6 +93,7 @@ class LLMScorerService:
         lines_removed: int,
         files_changed: int,
         similar_examples: list[dict],
+        developer_context: str = "",
     ) -> ScorerOutput:
         examples_block = _build_examples_block(similar_examples)
 
@@ -99,36 +106,12 @@ class LLMScorerService:
             files_changed=files_changed,
             cleaned_diff=cleaned_diff[:10000],
             examples_block=examples_block,
+            developer_context=developer_context or "No prior history available for this developer.",
         )
 
-        try:
-            return await self._call_gemini(prompt)
-        except Exception as e:
-            logger.warning("Gemini Scorer failed, trying local Ollama fallback: %s", e)
-            return await self._call_ollama(prompt)
+        return await self._call_openrouter(prompt)
 
-    async def _call_gemini(self, prompt: str) -> ScorerOutput:
-        async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=2, min=2, max=30),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-            reraise=True,
-        ):
-            with attempt:
-                from google import genai
-
-                client = genai.Client(api_key=settings.gemini_api_key)
-                response = client.models.generate_content(
-                    model=settings.llm_scorer_model,
-                    contents=prompt,
-                    config=genai.types.GenerateContentConfig(
-                        temperature=0.1,
-                        max_output_tokens=1024,
-                    ),
-                )
-                return self._parse_response(response.text)
-
-    async def _call_ollama(self, prompt: str) -> ScorerOutput:
+    async def _call_openrouter(self, prompt: str) -> ScorerOutput:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=2, min=2, max=30),
@@ -139,11 +122,11 @@ class LLMScorerService:
                 from openai import AsyncOpenAI
 
                 client = AsyncOpenAI(
-                    base_url=f"{settings.ollama_url}/v1",
-                    api_key="ollama",  # required by client but not used by Ollama
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=settings.openrouter_api_key,
                 )
                 response = await client.chat.completions.create(
-                    model=settings.llm_local_model,
+                    model=settings.llm_model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
                     max_tokens=1024,
