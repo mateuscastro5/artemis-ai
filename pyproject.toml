@@ -1,7 +1,7 @@
 [project]
-name = "perform-ai"
+name = "artemis-ai"
 version = "0.1.0"
-description = "PERFORM AI Analysis Service - Dual-LLM + RAG pipeline for PR complexity scoring"
+description = "Artemis AI Analysis Service - Dual-LLM + RAG pipeline for PR complexity scoring"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.115",

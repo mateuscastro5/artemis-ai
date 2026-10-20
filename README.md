@@ -52,10 +52,10 @@ Isso sobe automaticamente:
 | Serviço | Porta | Descrição |
 |---------|-------|-----------|
 | `qdrant` | 6333 / 6334 | Banco vetorial — armazena Gold Set e embeddings |
-| `perform-ai` | 8000 | FastAPI + pipeline Dual-LLM + RAG |
+| `artemis-ai` | 8000 | FastAPI + pipeline Dual-LLM + RAG |
 | `ollama` | 11434 | LLM local — baixa `deepseek-coder:6.7b` na primeira inicialização (~3.8 GB) |
-| `perform-api` | 3000 | Backend NestJS |
-| `perform-front` | 5123 | Frontend React/Vite |
+| `artemis-api` | 3000 | Backend NestJS |
+| `artemis-front` | 5123 | Frontend React/Vite |
 
 > **Primeira inicialização:** o Ollama vai baixar o modelo `deepseek-coder:6.7b` (~3.8 GB). Após o download, o modelo fica persistido no volume `ollama_data` e as próximas inicializações são instantâneas.
 
@@ -85,7 +85,7 @@ CONFIDENCE_THRESHOLD=0.7
 MAX_DIFF_LINES=3000
 
 # NestJS callback
-NESTJS_CALLBACK_URL=http://perform-api:3000
+NESTJS_CALLBACK_URL=http://artemis-api:3000
 INTERNAL_API_KEY=perform_internal_key_2024
 ```
 

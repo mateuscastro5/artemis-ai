@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PERFORM AI Analysis Service",
+    title="Artemis AI Analysis Service",
     description="Dual-LLM + RAG pipeline with per-developer temporal memory",
     version="0.2.0",
     lifespan=lifespan,

@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   # ─── Serviço de IA (FastAPI + RAG) ───────────────────────────────────────
-  perform-ai:
+  artemis-ai:
     build:
       context: .
       dockerfile: Dockerfile
@@ -43,35 +43,35 @@ services:
       start_period: 60s
 
   # ─── Backend (NestJS) ─────────────────────────────────────────────────────
-  perform-api:
+  artemis-api:
     build:
-      context: ../perform-api
+      context: ../artemis-api
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     env_file:
-      - ../perform-api/.env
+      - ../artemis-api/.env
     environment:
-      - AI_SERVICE_URL=http://perform-ai:8000
+      - AI_SERVICE_URL=http://artemis-ai:8000
     depends_on:
-      perform-ai:
+      artemis-ai:
         condition: service_healthy
     volumes:
-      - ../perform-api:/app
+      - ../artemis-api:/app
       - api_node_modules:/app/node_modules
     restart: unless-stopped
 
   # ─── Frontend (React via Vite) ────────────────────────────────────────────
-  perform-front:
+  artemis-front:
     build:
-      context: ../perform-front
+      context: ../artemis-front
       dockerfile: Dockerfile
     ports:
       - "5123:5123"
     depends_on:
-      - perform-api
+      - artemis-api
     volumes:
-      - ../perform-front:/app
+      - ../artemis-front:/app
       - front_node_modules:/app/node_modules
     restart: unless-stopped
 
