@@ -1,4 +1,4 @@
-# perform-ai
+# artemis-ai
 
 Serviço de análise de complexidade de Pull Requests via **Dual-LLM + RAG**.
 
@@ -40,7 +40,7 @@ Se a confiança for baixa (`< 0.7`), a análise é marcada como `doubtful` e env
 ## Setup completo com Docker Compose
 
 ```bash
-# Na raiz de perform-ai:
+# Na raiz de artemis-ai:
 cp .env.example .env
 # Edite o .env com sua GEMINI_API_KEY
 
@@ -126,7 +126,7 @@ Documentação interativa: `http://localhost:8000/docs`
 ## Estrutura
 
 ```
-perform-ai/
+artemis-ai/
   app/
     main.py               # FastAPI app, CORS, lifespan
     config.py             # Configurações via .env (Gemini, Ollama, Qdrant)
